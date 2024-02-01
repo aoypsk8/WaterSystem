@@ -1,67 +1,84 @@
 import { Request, Response } from "express";
-import connectMongoDB from "../utils/db";
+import connection from "../utils/db";
 import multerConfig from "../utils/multer_config";
 import multer from "multer";
-import { ObjectId } from "mongodb";
+
+const INSERT_CATEGORY = "INSERT INTO category (cateName, images) VALUES (?,?)";
+const SELECT_ALL_CATEGORY = "SELECT * FROM category ORDER BY id DESC";
+const SELECT_CATEGORY_BY_ID = "SELECT * FROM category WHERE id = ?";
+const DELETE_CATEGORY = "DELETE FROM category WHERE id = ?";
+
+const UPDATE_CATEGORY_WITHOUT_IMAGE =
+  "UPDATE category SET cateName = ? WHERE id = ?";
+const UPDATE_CATEGORY_WITH_IMAGE =
+  "UPDATE category SET cateName = ?, images = ? WHERE id = ?";
 
 interface CategoryInput {
   cateName: string;
 }
-const upload = multer(multerConfig.config).array(multerConfig.keyUpload);
+const upload = multer(multerConfig.config).single(multerConfig.keyUpload);
+
 export async function insertCategory(req: Request, res: Response) {
-  try {
-    upload(req, res, async (err) => {
-      if (err instanceof multer.MulterError) {
-        return res.status(500).json({ message: err });
-      } else if (err) {
-        return res.status(500).json({ message: err });
-      }
-      try {
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      console.log(`error: ${JSON.stringify(err)}`);
+      return res.status(500).json({ message: err });
+    } else if (err) {
+      console.log(`error: ${JSON.stringify(err)}`);
+      return res.status(500).json({ message: err });
+    } else {
+      console.log(`file: ${JSON.stringify(req.file)}`);
+      console.log(`body: ${JSON.stringify(req.body)}`);
+    }
 
-        const db = await connectMongoDB();
-        const categoryCollection = db.collection("category");
-        const images = Array.isArray(req.files) ? req.files.map(file => file.buffer) : [];
-       
-        
+    try {
+      const { cateName }: CategoryInput = req.body;
+      const images = req.file ? req.file.filename : null;
+      console.log(req.file?.filename);
 
-        const { cateName }: CategoryInput = req.body;
-        const newCate = {
-          cateName,
-          images
-        };
-        await categoryCollection.insertOne(newCate);
-
-        return res.status(201).json({
-          message: "Category created successfully",
-          status: "ok",
-          category: newCate,
-        });
-      } catch (error) {
-        console.log(`Internal Server Error: ${error}`);
-        return res.status(500).json({ error: "Internal Server Error" });
-      }
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
+      connection.execute(
+        INSERT_CATEGORY,
+        [cateName, images],
+        function (err, results: any) {
+          if (err) {
+            res.json({ status: "error", message: err });
+            return;
+          } else {
+            res.json({
+              status: "ok",
+              message: "category created successfully",
+              category: {
+                results,
+              },
+            });
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error storing cate in the database: ", error);
+      res.sendStatus(500).json(error);
+    }
+  });
 }
 
 export async function getAllCategory(req: Request, res: Response) {
   try {
-    const db = await connectMongoDB();
-    const categoryCollection = db.collection("category");
-    const category = await categoryCollection.find({}).toArray();
-
-    if (category.length > 0) {
-      return res.status(200).json({
-        message: "category fetched successfully",
-        status: "ok",
-        categorys: category,
-      });
-    } else {
-      return res.status(404).json({ error: "category not found" });
-    }
+    connection.execute(SELECT_ALL_CATEGORY, function (err, results: any) {
+      if (err) {
+        res.json({ status: "error", message: err });
+        return;
+      } else {
+        if (results.length > 0) {
+          return res.status(200).json({
+            message: "category fetched successfully",
+            status: "ok",
+            categorys: results,
+          });
+        } else {
+          return res.json({ error: "category not found" });
+        }
+      }
+    });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -70,20 +87,26 @@ export async function getAllCategory(req: Request, res: Response) {
 
 export async function getOneCategory(req: Request, res: Response) {
   try {
-    const db = await connectMongoDB();
-    const categoryCollection = db.collection("category");
-    const category = await categoryCollection.findOne({
-      _id: new ObjectId(req.params.CateID),
-    });
-    if (category != null) {
-      return res.status(200).json({
-        message: "category fetched successfully",
-        status: "ok",
-        category: category,
-      });
-    } else {
-      return res.status(404).json({ error: "category not found" });
-    }
+    connection.execute(
+      SELECT_CATEGORY_BY_ID,
+      [req.params.CateID],
+      function (err, results: any) {
+        if (err) {
+          res.json({ status: "error", message: err });
+          return;
+        } else {
+          if (results.length > 0) {
+            return res.status(200).json({
+              message: "category fetched successfully",
+              status: "ok",
+              categorys: results,
+            });
+          } else {
+            return res.json({ error: "category not found" });
+          }
+        }
+      }
+    );
   } catch (error) {
     console.log(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -92,21 +115,31 @@ export async function getOneCategory(req: Request, res: Response) {
 
 export async function deleteCategory(req: Request, res: Response) {
   try {
-    const db = await connectMongoDB();
-    const categoryCollection = db.collection("category");
-    const category = await categoryCollection.findOneAndDelete({
-      _id: new ObjectId(req.params.CateID),
-    });
-
-    if (category != null) {
-      return res.status(200).json({
-        message: "delete category successfully",
-        status: "ok",
-        category: category,
-      });
-    } else {
-      return res.status(404).json({ error: "category not found" });
-    }
+    connection.execute(
+      DELETE_CATEGORY,
+      [req.params.CateID],
+      function (err, results: any) {
+        if (err) {
+          res.json({ status: "error", message: err });
+          return;
+        } else {
+          if (results.affectedRows === 0) {
+            res
+              .status(404)
+              .json({ status: "not found", message: "category not found" });
+          } else {
+            res.json({
+              status: "ok",
+              message: "category deleted successfully",
+              category: {
+                id: req.params.CateID,
+              },
+            });
+          }
+        }
+      }
+    );
+  
   } catch (error) {
     console.log(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -116,58 +149,51 @@ export async function deleteCategory(req: Request, res: Response) {
 export async function updateCategory(req: Request, res: Response) {
   try {
     upload(req, res, async (err) => {
-        if (err instanceof multer.MulterError) {
-            return res.status(500).json({ message: err });
-        } else if (err) {
-            return res.status(500).json({ message: err });
+      if (err instanceof multer.MulterError) {
+        console.log(`error: ${JSON.stringify(err)}`);
+        return res.status(500).json({ message: err });
+      } else if (err) {
+        console.log(`error: ${JSON.stringify(err)}`);
+        return res.status(500).json({ message: err });
+      }
+      try {
+        const { cateName }: CategoryInput = req.body;
+        const images = req.file ? req.file.filename : null;
+
+        let sql = UPDATE_CATEGORY_WITHOUT_IMAGE;
+        let params = [cateName, req.params.CateID];
+
+        if (images) {
+          sql = UPDATE_CATEGORY_WITH_IMAGE;
+          params = [cateName, images, req.params.CateID];
         }
-        try {
-            const imageList: string[] = [];
-
-            const db = await connectMongoDB();
-            const categoryCollection = db.collection("category");
-            var { cateName}: CategoryInput = req.body;
-            const category = await categoryCollection.findOne({ _id: new ObjectId(req.params.CateID) });
-
-            if (category && category['images']) {
-                const images = category['images'];
-                images.forEach((image: string) => {
-                    imageList.push(image);
-                });
-            }
-            const images = Array.isArray(req.files) ? req.files.map(file => file.buffer) : imageList;
-
-            cateName = cateName ?? category!['cateName'];
-
-            const updateOperation = {
-                $set: {
-                  cateName,
-                  images
-                }
-            };
-            const updatedCategory = await categoryCollection.findOneAndUpdate(
-                { _id: new ObjectId(req.params.CateID) },
-                updateOperation,
-            );
-            if (updatedCategory) {
-                return res.status(200).json({
-                    message: "Category updated successfully",
-                    status: "ok",
-                    Category: updatedCategory
-                });
+        connection.execute(sql, params, function (err, results: any) {
+          if (err) {
+            res.json({ status: "error", message: err });
+            return;
+          } else {
+            if (results.affectedRows === 0) {
+              res
+                .status(404)
+                .json({ status: "not found", message: "category not found" });
             } else {
-                return res.status(404).json({ error: "Category not found" });
+              res.json({
+                status: "ok",
+                message: "category updated successfully",
+                category: {
+                  results,
+                },
+              });
             }
-
-
-        } catch (error) {
-            console.log(`Internal Server Error: ${error}`);
-            return res.status(500).json({ error: "Internal Server Error" });
-        }
-
+          }
+        });
+      } catch (err) {
+        console.error("Error storing category in the database: ", err);
+        res.sendStatus(500);
+      }
     });
-} catch (error) {
+  } catch (error) {
     console.log(error);
     return res.status(500).json({ error: "Internal Server Error" });
-}
+  }
 }

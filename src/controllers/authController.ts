@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
-// db
-import connectMongoDB from "../utils/db";
-import { authenticateTokenAdmin } from "../middleware/authMiddleware";
+import connection from "../utils/db";
+// db command
+const SELECT_USER_BY_USER = "SELECT * FROM users WHERE username = ?";
+const INSERT_USER =
+  "INSERT INTO users (username, password, location, role) VALUES (?, ?, ?,?)";
 
 interface UserInput {
   username: string;
@@ -16,38 +17,50 @@ interface UserInput {
 async function login(req: Request, res: Response) {
   const { username, password }: UserInput = req.body;
   try {
-    const db = await connectMongoDB();
-    const usersCollection = db.collection("users");
-
-    const user = await usersCollection.findOne({ username });
-
-    if (user == null) {
-      return res.json({ message: "User invalidate" });
-    } else {
-      const passwordMatch = await bcrypt.compare(password, user?.password);
-
-      if (!passwordMatch) {
-        return res.json({ message: "Password is not match !" });
-      }
-      const token = jwt.sign(
-        { username: user?.username, role: user?.role },
-        process.env.JWT_SECRET || "aoy@2023secret",
-        {
-          expiresIn: "1h",
+    connection.execute(
+      SELECT_USER_BY_USER,
+      [username],
+      (err: any, results: any) => {
+        if (err) {
+          console.error("Database error:", err);
+          res.status(500).json({ message: "Internal server error" });
+          return;
+        } else {
+          if (results.length > 0) {
+            bcrypt.compare(password, results[0].password, (err, hash) => {
+              if (err) {
+                res.status(500).json({ message: "Something went wrong" });
+                return;
+              } else {
+                if (hash) {
+                  const token = jwt.sign(
+                    { username: results.username, role: results.role },
+                    process.env.JWT_SECRET || "aoy@2023secret",
+                    {
+                      expiresIn: "1h",
+                    }
+                  );
+                  res.status(200).json({
+                    status: "ok",
+                    token: token,
+                    message: "Login successful",
+                    results,
+                  });
+                } else {
+                  res.status(400).json({
+                    message: "Username and password does not match",
+                  });
+                  return;
+                }
+              }
+            });
+          } else {
+            res.status(400).json({ message: "Email does not exist" });
+            return;
+          }
         }
-      );
-
-      if (passwordMatch) {
-        res.status(200).json({
-          status: "ok",
-          token: token,
-          message: "Login successful",
-          user,
-        });
-      } else {
-        res.status(401).json({ message: "Invalid username or password" });
       }
-    }
+    );
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
@@ -56,28 +69,43 @@ async function login(req: Request, res: Response) {
 async function register(req: Request, res: Response) {
   const { username, password, location, role }: UserInput = req.body;
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const db = await connectMongoDB();
-    const usersCollection = db.collection("users");
-    const existingUser = await usersCollection.findOne({ username });
-
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-    await usersCollection.insertOne({
-      username,
-      password: hashedPassword,
-      location,
-      role,
-    });
-    res.status(201).json({
-      message: "User registered successfully",
-      status: "ok",
-      location: location,
-    });
+    connection.execute(
+      SELECT_USER_BY_USER,
+      [username],
+      async (err: any, results: any) => {
+        if (err) {
+          console.error("Database error:", err);
+          res.status(500).json({ message: "Internal server error" });
+          return;
+        } else {
+          if (results.length > 0) {
+            res.status(400).json({ message: "User already exists" });
+            return;
+          } else {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            connection.execute(
+              INSERT_USER,
+              [username, hashedPassword, location, role],
+              (err: any) => {
+                if (err) {
+                  console.error("Database error:", err);
+                  res.status(500).json({ message: "Internal server error" });
+                  return;
+                } else {
+                  res.status(201).json({
+                    message: "User registered successfully",
+                    status: "ok",
+                  });
+                }
+              }
+            );
+          }
+        }
+      }
+    );
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
+
 export default { login, register };

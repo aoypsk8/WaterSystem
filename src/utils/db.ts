@@ -1,19 +1,21 @@
-import { MongoClient } from 'mongodb';
-//mongodb+srv://aoypsk8:bt6wBcxqflFGsqN7@cluster0.e947ezb.mongodb.net/
-const url = 'mongodb+srv://aoypsk8:bt6wBcxqflFGsqN7@cluster0.e947ezb.mongodb.net/'; 
-const dbName = 'test'; 
+import mysql, { ConnectionOptions } from "mysql2";
 
+const ConnectionConfig: ConnectionOptions = {
+    host: process.env.DB_HOST || '127.0.0.1',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    port: parseInt(process.env.DB_PORT || "3306"),
+    database: process.env.DB_DATABASE || 'test',
+};
 
-async function connectMongoDB() {
-    const client = new MongoClient(url);
-    try {
-        await client.connect();
-        console.log('Connected to MongoDB Success !');
-        return client.db(dbName);
-    } catch (error) {
-        console.error('Error connecting to MongoDB:', error);
-        throw error;
+const connection =mysql.createConnection(ConnectionConfig)
+
+connection.connect((error:Error | unknown)=>{
+    if(error){
+        console.error("Error connecting to MySQL database: ", error)
+    }else{
+        console.log('Connected to MySQL database!')
     }
-}
+})
 
-export default connectMongoDB;
+export default connection
