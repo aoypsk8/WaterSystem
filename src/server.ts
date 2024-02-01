@@ -1,0 +1,28 @@
+import express from 'express'
+import bodyParser from 'body-parser'
+import cors from 'cors'
+import dotenv from 'dotenv'
+
+//controller
+import authRoute from './Routers/authRoute' 
+import productRoute from './Routers/productRoute' 
+import userRoute from './Routers/userRoute' 
+import categoryRoute from './Routers/categoryRoute' 
+
+
+dotenv.config()
+const app = express();
+
+app.use(bodyParser.json())
+app.use(cors())
+
+
+app.use('/api/auth',authRoute);
+app.use('/api/product',productRoute);
+app.use('/api/user',userRoute);
+app.use('/api/category',categoryRoute);
+
+app.listen(process.env.PORT || 3000, () => {
+    console.log(`App listening on port ${process.env.PORT || 3000}`)
+    console.log(`Press Ctrl+C to quit.`)
+  })
