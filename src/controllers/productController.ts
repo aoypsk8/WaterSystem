@@ -346,3 +346,58 @@ export async function DecreaseProduct(req: Request, res: Response) {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 }
+
+
+
+export async function IncreaseProduct(req: Request, res: Response) {
+  try {
+    try {
+      connection.execute(
+        SELECT_PRODUCT_BY_ID,
+        [req.params.ProductId],
+        function (err, results: any) {
+          if (err) {
+            res.json({ status: "error", message: err });
+            return;
+          } else {
+            if (results.length > 0) {
+              var stock = parseInt(results[0].stock) + 1;
+              console.log(results[0].stock);
+              console.log(stock);
+              if (stock < 0) {
+                return res.json({
+                  message: "Product not enought",
+                });
+              } else {
+                connection.execute(
+                  UPDATE_PRODUCT_DECREASE,
+                  [stock, req.params.ProductId],
+                  function (err, results: any) {
+                    if (err) {
+                      res.json({ status: "error", message: err });
+                      return;
+                    } else {
+                      return res.status(200).json({
+                        message: "DECREASE successfully",
+                        status: "ok",
+                        products: results,
+                      });
+                    }
+                  }
+                );
+              }
+            } else {
+              return res.json({ error: "Product not found" });
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.error("Error storing Product in the database: ", err);
+      res.sendStatus(500);
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+}
