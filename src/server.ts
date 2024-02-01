@@ -16,6 +16,9 @@ const app = express();
 app.use(bodyParser.json())
 app.use(cors())
 
+// Use Static Files
+app.use('/uploads', express.static('uploads'))
+app.use('/uploads/images', express.static('uploads/images'))
 
 app.use('/api/auth',authRoute);
 app.use('/api/product',productRoute);

@@ -44,10 +44,10 @@ async function login(req: Request, res: Response) {
                     status: "ok",
                     token: token,
                     message: "Login successful",
-                    results,
+                    user:results,
                   });
                 } else {
-                  res.status(400).json({
+                  res.json({
                     message: "Username and password does not match",
                   });
                   return;
