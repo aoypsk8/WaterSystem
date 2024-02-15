@@ -1,12 +1,13 @@
-import { Request, Response, response } from "express";
+import { Request, Response } from "express";
 import axios from "axios";
 // @ts-ignore
 import gtts from "gtts";
 
 export async function textToSpeech(req: Request, res: Response) {
   try {
-    const { text, language = "en", slow = false } = req.body;
+    const { text, language = "en", slow = true } = req.body;
     // Create the audio file
+    
     const speech = new gtts(text, language, slow);
     const audioStream = speech.stream();
     // Set response headers
@@ -14,6 +15,7 @@ export async function textToSpeech(req: Request, res: Response) {
     res.setHeader("Content-Disposition", "attachment; filename=output.mp3");
     // Pipe audio stream to response
     audioStream.pipe(res);
+    
   } catch (error) {
     res.json(error);
   }
